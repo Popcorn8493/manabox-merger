@@ -1,49 +1,71 @@
+import sys
 import pandas as pd
 import tkinter as tk
 from tkinter import filedialog
 
-root = tk.Tk()
-root.withdraw()
-csv_file = filedialog.askopenfilename(
-    title="Select CSV file to merge",
-    filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
-)
 
-if not csv_file:
-    print("No file selected. Exiting...")
-    exit()
+GROUPING_COLUMNS = [
+    'Name', 'Set code', 'Collector number', 'Language',
+    'Foil', 'Condition', 'Purchase price currency', 'Altered', 'Scryfall ID'
+]
 
-try:
-    df = pd.read_csv(csv_file, header=0)
-    df['Quantity'] = pd.to_numeric(df['Quantity'], errors='coerce').fillna(0)
-    df['Purchase price'] = pd.to_numeric(df['Purchase price'], errors='coerce').fillna(0)
-    
-    df['Altered'] = df['Altered'].fillna('No')
-    df['Collector number'] = df['Collector number'].fillna('Unknown')
-    df['Foil'] = df['Foil'].fillna('normal')
-    df['Condition'] = df['Condition'].fillna('mint')
-    df['Scryfall ID'] = df['Scryfall ID'].fillna('unknown')
+NUMERIC_COLUMNS = ['Quantity', 'Purchase price']
 
-    original_quantity = df['Quantity'].sum()
-    print(f"Original: {len(df)} entries, {original_quantity} total cards")
+MISSING_DEFAULTS = {
+    'Altered': 'No',
+    'Collector number': 'Unknown',
+    'Foil': 'normal',
+    'Condition': 'mint',
+    'Scryfall ID': 'unknown',
+}
 
-    grouping_cols = ['Name', 'Set code', 'Collector number', 'Language',
-                     'Foil', 'Condition', 'Purchase price currency', 'Altered', 'Scryfall ID']
 
-    merged_df = df.groupby(grouping_cols, as_index=False).agg({
-        'Quantity': 'sum',
-        'Purchase price': 'mean'
-    })
+def main() -> None:
+    root = tk.Tk()
+    root.withdraw()
+    csv_file = filedialog.askopenfilename(
+        title="Select CSV file to merge",
+        filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+    )
+    root.destroy()
 
-    merged_quantity = merged_df['Quantity'].sum()
-    print(f"Merged: {len(merged_df)} entries, {merged_quantity} total cards")
+    if not csv_file:
+        print("No file selected. Exiting...")
+        sys.exit()
 
-    if original_quantity == merged_quantity:
-        print("Merge successful!")
-        merged_df.to_csv('manabox_inventory_merged.csv', index=False)
-        print(f"Saved to 'manabox_inventory_merged.csv'")
-    else:
-        print("Quantity mismatch - merge failed!")
+    try:
+        df = pd.read_csv(csv_file, header=0)
 
-except Exception as e:
-    print(f"Error: {e}")
+        
+        df[NUMERIC_COLUMNS] = (
+            df[NUMERIC_COLUMNS]
+            .apply(pd.to_numeric, errors='coerce')
+            .fillna(0)
+        )
+
+        df.fillna(value=MISSING_DEFAULTS, inplace=True)
+
+        original_quantity = df['Quantity'].sum()
+        print(f"Original: {len(df)} entries, {original_quantity} total cards")
+
+        merged_df = df.groupby(GROUPING_COLUMNS, as_index=False).agg(
+            Quantity=('Quantity', 'sum'),
+            **{'Purchase price': ('Purchase price', 'mean')}
+        )
+
+        merged_quantity = merged_df['Quantity'].sum()
+        print(f"Merged: {len(merged_df)} entries, {merged_quantity} total cards")
+
+        if original_quantity == merged_quantity:
+            print("Merge successful!")
+            merged_df.to_csv('manabox_inventory_merged.csv', index=False)
+            print("Saved to 'manabox_inventory_merged.csv'")
+        else:
+            print("Quantity mismatch - merge failed!")
+
+    except Exception as e:
+        print(f"Error: {e}")
+
+
+if __name__ == "__main__":
+    main()
